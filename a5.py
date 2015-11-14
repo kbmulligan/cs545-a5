@@ -12,7 +12,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from sklearn import cross_validation, svm, metrics, datasets
-
+from sklearn import pipeline
 from sklearn import preprocessing as pp
 from sklearn import decomposition as decomp
 
@@ -20,7 +20,7 @@ arcene_data_filename = 'arcene_tv.data'
 arcene_labels_filename =  'arcene_tv.labels'
 leukemia_filename = 'leu.both'
 
-
+complete = False
 
 def separate(X, y) :
     """ Returns indices of all positives examples, and indices of all negative examples in X according to labels y. """
@@ -115,15 +115,7 @@ def load_leukemia_data() :
 
     return X_leu, y_leu
 
-if __name__ == '__main__':
-    print 'Testing...a5.py'
-
-    # load Arcene data
-    X_arc, y_arc = load_arcene_data()
-
-    # load leukemia data
-    X_leu, y_leu = load_leukemia_data()
-
+def test_golub (X_arc, y_arc, X_leu, y_leu) :
 
     print '\nTesting separate...'
     pos_arc, neg_arc = separate(X_arc, y_arc)
@@ -135,7 +127,6 @@ if __name__ == '__main__':
 
     assert(X_leu.shape[0] == len(pos_leu) + len(neg_leu))
     print X_leu.shape[0], len(pos_leu), len(neg_leu)
-
 
 
     print '\nTesting golub score...'
@@ -160,20 +151,106 @@ if __name__ == '__main__':
     print 'Golub passes test!'
 
 
-    print '\nCalculating Golub scores...'
-    golubs_arc = golub(X_arc, y_arc)[0]
-    print ''
-    print 'Golubs(Arcene):'
-    print golubs_arc
-    print len(golubs_arc)
-    assert(len(golubs_arc) == len(X_arc.T))
+    ############# COMPUTATIONAL EXPENSIVE --- COMMENT OUT UNTIL END #####################
 
-    golubs_leu = golub(X_leu, y_leu)[0]
-    print ''
-    print 'Golubs(leukemia):'
-    print golubs_leu
-    print len(golubs_leu)
-    assert(len(golubs_leu) == len(X_leu.T))
+    if complete = True:
+        print '\nCalculating Golub scores...'
+        golubs_arc = golub(X_arc, y_arc)[0]
+        print ''
+        print 'Golubs(Arcene):'
+        print golubs_arc
+        print len(golubs_arc)
+        assert(len(golubs_arc) == len(X_arc.T))
 
-    print 'Golub scores calculated!'
+        golubs_leu = golub(X_leu, y_leu)[0]
+        print ''
+        print 'Golubs(leukemia):'
+        print golubs_leu
+        print len(golubs_leu)
+        assert(len(golubs_leu) == len(X_leu.T))
+
+        print 'Golub scores calculated!'
+
+def get_nonzeros (X,y):
+
+    iterations = 5
+    nonzeros = []
+    for i in range(iterations):
+
+        svm_l1 = svm.LinearSVC(penalty='l1', dual=False)
+        classify = svm_l1.fit(X, y)
+
+        # print classify.coef_
+        # print 'Nonzeros:', classify.coef_[0].nonzero()[0]
+        nonzeros.append(len(classify.coef_[0].nonzero()[0]))
+        print 'Nonzero elements:', nonzeros[-1]
+
+    return np.mean(nonzeros)
+
+
+def test_svm (Xa, ya, Xl, yl) :
+
+    folds = 5
+
+    print '\nTesting L1 SVM...'
+
+    arc_nnz = get_nonzeros(Xa, ya)
+    print 'ARCENE   - Average number of non-zero elements:', arc_nnz
+
+    leu_nnz = get_nonzeros(Xl, yl)
+    print 'LEUKEMIA - Average number of non-zero elements:', leu_nnz
+
+
+
+    svm_l1 = svm.LinearSVC(penalty='l1', dual=False)
+    svm_l2 = svm.LinearSVC(penalty='l2', dual=False)
+
+    rfe = RFECV()
+
+    # setup pipes and estimators
+    estimators1 = [('svm1', svm_l1)]
+    estimators2 = [('svm1', svm_l1), ('svm2', svm_l2)]
+    estimators3 = [('svm2', svm_l2)]
+    estimators4 = [('svm1', svm_l1)]
+
+    pipe1 = pipeline.Pipeline(estimators1)
+
+    
+    # setup cross validation folds
+    cross_val = cross_validation.StratifiedKFold(ya, folds, shuffle=True)
+
+    # FIT
+    classifier = pipe1.fit(Xa, ya)
+
+
+    # CHECK SCORES
+    cv_scores = cross_validation.cross_val_score(pipe1, Xa, ya, cv=cross_val)
+
+    print 'Cross val scores for', folds, 'folds:'
+    print cv_scores, np.mean(cv_scores)
+
+
+
+    
+
+    return
+
+
+if __name__ == '__main__':
+    print 'Testing...a5.py'
+
+    # load Arcene data
+    X_arc, y_arc = load_arcene_data()
+
+    # load leukemia data
+    X_leu, y_leu = load_leukemia_data()
+
+    # test golub
+    test_golub(X_arc, y_arc, X_leu, y_leu)
+
+
+
+    # do L1 svm
+    test_svm(X_arc, y_arc, X_leu, y_leu)
+    
 
