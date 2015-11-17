@@ -122,24 +122,24 @@ def test_golub (X_arc, y_arc, X_leu, y_leu) :
     pos_arc, neg_arc = separate(X_arc, y_arc)
 
     assert(len(X_arc) == len(pos_arc) + len(neg_arc))
-    print len(X_arc), len(pos_arc), len(neg_arc)
+    print 'Total/pos/neg:', len(X_arc), len(pos_arc), len(neg_arc)
 
     pos_leu, neg_leu = separate(X_leu, y_leu)
 
     assert(X_leu.shape[0] == len(pos_leu) + len(neg_leu))
-    print X_leu.shape[0], len(pos_leu), len(neg_leu)
+    print 'Total/pos/neg:', X_leu.shape[0], len(pos_leu), len(neg_leu)
 
 
     print '\nTesting golub score...'
 
-    print X_arc
-    print 'Feature 0...'
-    print X_arc.T[0], len(X_arc.T[0])
+    # print X_arc
+    # print 'Feature 0...'
+    # print X_arc.T[0], len(X_arc.T[0])
 
     X_pos_arc = np.array([X_arc[p] for p in pos_arc])
     X_neg_arc = np.array([X_arc[n] for n in neg_arc])
 
-    print len(X_arc), len(X_pos_arc), len(X_neg_arc)
+    print 'Total/pos/neg:', len(X_arc), len(X_pos_arc), len(X_neg_arc)
 
     assert(len(X_arc) == len(X_pos_arc) + len(X_neg_arc)) 
 
@@ -172,9 +172,8 @@ def test_golub (X_arc, y_arc, X_leu, y_leu) :
 
         print 'Golub scores calculated!'
 
-def get_nonzeros (X,y):
+def get_nonzeros (X, y, iterations=5):
 
-    iterations = 1
     nonzeros = []
     for i in range(iterations):
 
@@ -184,7 +183,7 @@ def get_nonzeros (X,y):
         # print classify.coef_
         # print 'Nonzeros:', classify.coef_[0].nonzero()[0]
         nonzeros.append(len(classify.coef_[0].nonzero()[0]))
-        print 'Nonzero elements:', nonzeros[-1]
+        # print 'Nonzero elements:', nonzeros[-1]
 
     return np.mean(nonzeros)
 
@@ -196,12 +195,13 @@ def test_svm (Xa, ya, Xl, yl) :
 
 
     print '\nTesting L1 SVM...'
+    iters = 2
 
-    arc_nnz = get_nonzeros(Xa, ya)
-    print 'ARCENE   - Average number of non-zero elements:', arc_nnz
+    arc_nnz = get_nonzeros(Xa, ya, iterations=iters)
+    print 'ARCENE   - Average number of non-zero elements in', iters, 'iterations:', arc_nnz
 
-    leu_nnz = get_nonzeros(Xl, yl)
-    print 'LEUKEMIA - Average number of non-zero elements:', leu_nnz
+    leu_nnz = get_nonzeros(Xl, yl, iterations=iters)
+    print 'LEUKEMIA - Average number of non-zero elements in', iters, 'iterations:', leu_nnz
 
     
 
@@ -244,9 +244,23 @@ def test_svm (Xa, ya, Xl, yl) :
 
     return
 
-def test_subsample_method(Xa, ya, Xl, yl, subs=50):
 
-    Xs, ys = k_subsamples(Xa, ya, subs)
+def test_subsample_method(Xa, ya, Xl, yl, subs=50) :
+    """ Run subsample method on both datasets and return a tuple of their feature score results. """
+
+    print '\nTesting k-subsample method...'
+
+    scores_arc = get_scores_from_subsample(Xa, ya, subs)
+    scores_leu = get_scores_from_subsample(Xl, yl, subs)
+
+    return scores_arc, scores_leu
+
+
+def get_scores_from_subsample(X, y, subs=50) :
+    """ Return array of length equal to number of features in X, with count of number of times each feature 
+        had nonzero weight vector when trained with subsamples. """
+
+    Xs, ys = k_subsamples(X, y, subs)
 
     classifiers = []
     coefs = []
@@ -256,18 +270,20 @@ def test_subsample_method(Xa, ya, Xl, yl, subs=50):
         coefs.append(classifiers[-1].coef_[0])
 
 
-    print len(coefs)
-    print len(coefs[0]), len(coefs[-1])
-    print coefs[0], coefs[-1]
+    print 'Subsamples:', len(coefs)
+    assert(len(coefs) == subs)
+    assert(len(coefs[0]) == len(coefs[-1]))
+    # print coefs[0], coefs[-1]
 
     scores = get_scores(coefs)
 
-    print scores, len(scores)
+    print scores, 'Length:', len(scores), 'Nonzeros:', len(np.nonzero(scores)[-1])
 
     return scores
 
 
-def k_subsamples(X, y, k):
+def k_subsamples(X, y, k) :
+    """ Return k number of random subsamples in data array X_subs, and label array y_subs. """
 
     X_subs = []
     y_subs = []
@@ -282,7 +298,7 @@ def k_subsamples(X, y, k):
 
     return X_subs, y_subs
 
-def rand_subsample(X, y, frac=0.8):
+def rand_subsample(X, y, frac=0.8) :
     """ Returns random subsample X_sub, y_sub with only fraction 'frac' of the original examples."""
 
     assert(frac <= 1.0)
@@ -297,8 +313,11 @@ def rand_subsample(X, y, frac=0.8):
     X_sub = X[:]
     y_sub = y[:]
 
-    np.random.shuffle(X_sub)
-    np.random.shuffle(y_sub)
+    assert(len(X) == len(y))
+    p = np.random.permutation(len(X))                # shuffle both the same way
+
+    X_sub = X_sub[p]
+    y_sub = y_sub[p]
 
     X_sub = X_sub[:keep]
     y_sub = y_sub[:keep]
@@ -306,14 +325,15 @@ def rand_subsample(X, y, frac=0.8):
     return X_sub, y_sub
 
 
-def train_svm(X,y):
+def train_svm(X,y) :
+    """ Train a single L1 SVM on the data X, y given and return the resulting classifier. """
 
     svm_l1 = svm.LinearSVC(penalty='l1', dual=False)
     classifier = svm_l1.fit(X,y)
     
     return classifier
 
-def get_scores(coefs):
+def get_scores(coefs) :
 
     scores = np.zeros(len(coefs[0]))
 
@@ -326,6 +346,73 @@ def get_scores(coefs):
             scores[i] += 1
 
     return scores
+
+
+def compare_methods(X, y) :
+    """ Compare Golub, L1-SVM subsample, and RFE accuracies for given dataset X, y. 
+        Returns tuple of accuracies in (golub/svm/rfe) order. """
+
+    acc_golub = golub_accuracy(X, y)
+
+    acc_l1svm = l1svm_accuracy(X, y)
+
+    acc_rfe = rfe_accuracy(X, y)
+
+    return (acc_golub, acc_l1svm, acc_rfe)
+
+
+def golub_accuracy(X, y) :
+    """ Given dataset X and labels y, compute accuracy vs features selected for Golub score selector. """
+    print 'Calculating Golub score feature selction accuracy...'
+
+    acc = 0
+    accuracies = []
+
+    assert(len(X[0]) == len(X[-1]))
+    features = len(X[-1])
+
+
+    start = 1
+    stop = features
+    steps = 10                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
+    step = int(np.floor(features/steps))
+
+    feature_range = np.arange(start, stop, step)
+    print feature_range, len(feature_range)
+
+    soft_margin = 1.0
+    l2svm = svm.LinearSVC(C=soft_margin)
+
+
+    estimators = [('selection', svm_l1), ('classification', l2svm)]
+    pipe = pipeline.Pipeline(estimators)
+
+
+
+    for features in feature_range:
+        accuracies.append(0)
+
+    assert(len(accuracies) == len(feature_range))
+
+    return acc
+
+def l1svm_accuracy(X, y) :
+    """ Given dataset X and labels y, compute accuracy vs features selected for L1-SVM feature selector. """
+    print 'Calculating L1-SVM features selction accuracy...'
+
+    acc = 0
+
+
+    return acc
+
+def rfe_accuracy(X, y) :
+    """ Given dataset X and labels y, compute accuracy vs features selected for RFE selector. """
+    print 'Calculating RFE feature selction accuracy...'
+
+    acc = 0
+
+
+    return acc
 
 
 
@@ -345,8 +432,11 @@ if __name__ == '__main__':
     # do L1 svm
     test_svm(X_arc, y_arc, X_leu, y_leu)
 
-
-
+    # test k_subsample L1-SVM selection method 
     subs = 25
     test_subsample_method(X_arc, y_arc, X_leu, y_leu, subs)
 
+
+    # do method comparison of accuracies w/ Golub, L1-SVM subsample, and RFE
+    compare_methods(X_arc, y_arc)
+    compare_methods(X_leu, y_leu)
