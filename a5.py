@@ -244,14 +244,27 @@ def test_svm (Xa, ya, Xl, yl) :
 
     return
 
-def test_subsample_method(Xa, ya, Xl, yl):
+def test_subsample_method(Xa, ya, Xl, yl, subs=50):
 
-    Xs, ys = k_subsamples(Xa, ya, 5)
+    Xs, ys = k_subsamples(Xa, ya, subs)
+
+    classifiers = []
+    coefs = []
 
     for X, y in zip(Xs, ys):
-        train_svm(X, y)
+        classifiers.append(train_svm(X, y))
+        coefs.append(classifiers[-1].coef_[0])
 
-    return
+
+    print len(coefs)
+    print len(coefs[0]), len(coefs[-1])
+    print coefs[0], coefs[-1]
+
+    scores = get_scores(coefs)
+
+    print scores, len(scores)
+
+    return scores
 
 
 def k_subsamples(X, y, k):
@@ -278,6 +291,9 @@ def rand_subsample(X, y, frac=0.8):
 
     keep = int(np.floor(total * frac))
 
+    # print 'Total:', total
+    # print 'Keep:', keep
+
     X_sub = X[:]
     y_sub = y[:]
 
@@ -294,7 +310,24 @@ def train_svm(X,y):
 
     svm_l1 = svm.LinearSVC(penalty='l1', dual=False)
     classifier = svm_l1.fit(X,y)
-    return 
+    
+    return classifier
+
+def get_scores(coefs):
+
+    scores = np.zeros(len(coefs[0]))
+
+    # print len(scores)
+
+    for w in coefs:
+        indices = np.nonzero(w)
+
+        for i in indices:
+            scores[i] += 1
+
+    return scores
+
+
 
 if __name__ == '__main__':
     print 'Testing...a5.py'
@@ -311,6 +344,9 @@ if __name__ == '__main__':
 
     # do L1 svm
     test_svm(X_arc, y_arc, X_leu, y_leu)
-    
-    test_subsample_method(X_arc, y_arc, X_leu, y_leu)
+
+
+
+    subs = 25
+    test_subsample_method(X_arc, y_arc, X_leu, y_leu, subs)
 
