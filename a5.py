@@ -365,6 +365,8 @@ def golub_accuracy(X, y) :
     """ Given dataset X and labels y, compute accuracy vs features selected for Golub score selector. """
     print 'Calculating Golub score feature selction accuracy...'
 
+    folds = 5
+
     acc = 0
     accuracies = []
 
@@ -374,25 +376,48 @@ def golub_accuracy(X, y) :
 
     start = 1
     stop = features
-    steps = 10                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
+    steps = 5                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
     step = int(np.floor(features/steps))
 
     feature_range = np.arange(start, stop, step)
     print feature_range, len(feature_range)
 
     soft_margin = 1.0
-    l2svm = svm.LinearSVC(C=soft_margin)
-
-
-    estimators = [('selection', svm_l1), ('classification', l2svm)]
-    pipe = pipeline.Pipeline(estimators)
-
+    l2svm = svm.LinearSVC(C=soft_margin)        # classifer (same for all accuracy comparisons)
 
 
     for features in feature_range:
-        accuracies.append(0)
+
+        selector = fs.SelectKBest(golub, features)
+
+        estimators = [('selection', selector), ('classification', l2svm)]
+        pipe = pipeline.Pipeline(estimators)
+        
+        pipe.fit(X, y)
+
+        acc = cross_validation.cross_val_score(pipe, X, y, cv=folds)
+
+        accuracies.append(np.mean(acc))
+
+
+
 
     assert(len(accuracies) == len(feature_range))
+
+    print accuracies, len(accuracies)
+
+
+    # plot it
+    plt.plot(feature_range, accuracies)
+
+    # plot setup
+    plt.xlabel('Features')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy vs Features')
+    plt.grid(True)
+    plt.savefig('Accuracy-vs-Features.png')
+    plt.show()
+    plt.close()
 
     return acc
 
