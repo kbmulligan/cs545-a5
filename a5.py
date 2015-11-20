@@ -21,7 +21,7 @@ arcene_data_filename = 'arcene_tv.data'
 arcene_labels_filename =  'arcene_tv.labels'
 leukemia_filename = 'leu.both'
 
-complete = False
+complete = True
 
 def separate(X, y) :
     """ Returns indices of all positives examples, and indices of all negative examples in X according to labels y. """
@@ -195,7 +195,7 @@ def test_svm (Xa, ya, Xl, yl) :
 
 
     print '\nTesting L1 SVM...'
-    iters = 2
+    iters = 10
 
     arc_nnz = get_nonzeros(Xa, ya, iterations=iters)
     print 'ARCENE   - Average number of non-zero elements in', iters, 'iterations:', arc_nnz
@@ -245,7 +245,7 @@ def test_svm (Xa, ya, Xl, yl) :
     return
 
 
-def test_subsample_method(Xa, ya, Xl, yl, subs=50) :
+def test_subsample_method(Xa, ya, Xl, yl, subs=10) :
     """ Run subsample method on both datasets and return a tuple of their feature score results. """
 
     print '\nTesting k-subsample method...'
@@ -256,7 +256,7 @@ def test_subsample_method(Xa, ya, Xl, yl, subs=50) :
     return scores_arc, scores_leu
 
 
-def get_scores_from_subsample(X, y, subs=50) :
+def get_scores_from_subsample(X, y, subs=10) :
     """ Return array of length equal to number of features in X, with count of number of times each feature 
         had nonzero weight vector when trained with subsamples. """
 
@@ -348,24 +348,35 @@ def get_scores(coefs) :
     return scores
 
 
-def compare_methods(X, y) :
+def l1svm_score(X, y) :
+    """ Return the Golub score of a labeled dataset. Returns vector, scores, of length 
+        equal to number of features in X. """
+
+    subs = 10
+
+    scores = get_scores_from_subsample(X, y, subs)
+
+    return scores, scores
+
+
+def compare_methods(X, y, label='') :
     """ Compare Golub, L1-SVM subsample, and RFE accuracies for given dataset X, y. 
         Returns tuple of accuracies in (golub/svm/rfe) order. """
 
-    acc_golub = golub_accuracy(X, y)
+    print '\nCOMPARING ACCURACY OF METHODS...'
 
-    acc_l1svm = l1svm_accuracy(X, y)
+    acc_golub = golub_accuracy(X, y, label)
 
-    acc_rfe = rfe_accuracy(X, y)
+    acc_l1svm = l1svm_accuracy(X, y, label)
+
+    acc_rfe = rfe_accuracy(X, y, label)
 
     return (acc_golub, acc_l1svm, acc_rfe)
 
 
-def golub_accuracy(X, y) :
+def golub_accuracy(X, y, label='', folds=3) :
     """ Given dataset X and labels y, compute accuracy vs features selected for Golub score selector. """
     print 'Calculating Golub score feature selction accuracy...'
-
-    folds = 5
 
     acc = 0
     accuracies = []
@@ -376,7 +387,7 @@ def golub_accuracy(X, y) :
 
     start = 1
     stop = features
-    steps = 5                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
+    steps = 20                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
     step = int(np.floor(features/steps))
 
     feature_range = np.arange(start, stop, step)
@@ -388,6 +399,8 @@ def golub_accuracy(X, y) :
 
     for features in feature_range:
 
+        print 'Testing', features, 'feature(s)'
+
         selector = fs.SelectKBest(golub, features)
 
         estimators = [('selection', selector), ('classification', l2svm)]
@@ -398,9 +411,6 @@ def golub_accuracy(X, y) :
         acc = cross_validation.cross_val_score(pipe, X, y, cv=folds)
 
         accuracies.append(np.mean(acc))
-
-
-
 
     assert(len(accuracies) == len(feature_range))
 
@@ -415,29 +425,135 @@ def golub_accuracy(X, y) :
     plt.ylabel('Accuracy')
     plt.title('Accuracy vs Features')
     plt.grid(True)
-    plt.savefig('Accuracy-vs-Features.png')
-    plt.show()
+    plt.savefig('Accuracy-vs-Features(Golub-' + label + ').png')
+    # plt.show()
     plt.close()
 
-    return acc
+    return accuracies
 
-def l1svm_accuracy(X, y) :
+def l1svm_accuracy(X, y, label='', folds=3) :
     """ Given dataset X and labels y, compute accuracy vs features selected for L1-SVM feature selector. """
-    print 'Calculating L1-SVM features selction accuracy...'
+    print 'Calculating L1-SVM feature selction accuracy...'
 
     acc = 0
+    accuracies = []
+
+    assert(len(X[0]) == len(X[-1]))
+    features = len(X[-1])
 
 
-    return acc
+    start = 1
+    stop = features
+    steps = 20                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
+    step = int(np.floor(features/steps))
 
-def rfe_accuracy(X, y) :
+    feature_range = np.arange(start, stop, step)
+    print feature_range, len(feature_range)
+
+    soft_margin = 1.0
+    l2svm = svm.LinearSVC(C=soft_margin)        # classifer (same for all accuracy comparisons)
+
+
+    for features in feature_range:
+
+        print 'Testing', features, 'feature(s)'
+
+        selector = fs.SelectKBest(l1svm_score, features)
+
+        estimators = [('selection', selector), ('classification', l2svm)]
+        pipe = pipeline.Pipeline(estimators)
+        
+        pipe.fit(X, y)
+
+        acc = cross_validation.cross_val_score(pipe, X, y, cv=folds)
+
+        accuracies.append(np.mean(acc))
+
+    assert(len(accuracies) == len(feature_range))
+
+    print accuracies, len(accuracies)
+
+
+    # plot it
+    plt.plot(feature_range, accuracies)
+
+    # plot setup
+    plt.xlabel('Features')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy vs Features')
+    plt.grid(True)
+    plt.savefig('Accuracy-vs-Features(L1SVM-' + label + ').png')
+    # plt.show()
+    plt.close()
+
+
+    return accuracies
+
+def rfe_accuracy(X, y, label='', folds=3) :
     """ Given dataset X and labels y, compute accuracy vs features selected for RFE selector. """
     print 'Calculating RFE feature selction accuracy...'
 
     acc = 0
+    accuracies = []
+
+    assert(len(X[0]) == len(X[-1]))
+    features = len(X[-1])
 
 
-    return acc
+    start = 1
+    stop = features
+    steps = 20                              # steps is also the number of datapoints their will be on the x-axis for the accuracy plot
+    step = int(np.floor(features/steps))
+
+    feature_range = np.arange(start, stop, step)
+    print feature_range, len(feature_range)
+
+    soft_margin = 1.0
+    l2svm = svm.LinearSVC(C=soft_margin)        # classifer (same for all accuracy comparisons)
+    
+    estimator = svm.LinearSVC(C=soft_margin)    # estimator for RFE
+    step_delta = 0.05
+
+    for features in feature_range:
+
+        print 'Testing', features, 'feature(s)'
+
+        selector = fs.RFE(estimator, features, step=step_delta)
+
+        # print 'Built selector'
+
+        estimators = [('selection', selector), ('classification', l2svm)]
+        pipe = pipeline.Pipeline(estimators)
+        
+        # print 'Built pipe, fitting next...'
+
+        pipe.fit(X, y)
+
+        # print 'Fitted'
+
+        acc = cross_validation.cross_val_score(pipe, X, y, cv=folds)
+
+        accuracies.append(np.mean(acc))
+
+    assert(len(accuracies) == len(feature_range))
+
+    print accuracies, len(accuracies)
+
+
+    # plot it
+    plt.plot(feature_range, accuracies)
+
+    # plot setup
+    plt.xlabel('Features')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy vs Features')
+    plt.grid(True)
+    plt.savefig('Accuracy-vs-Features(RFE-' + label + ').png')
+    # plt.show()
+    plt.close()
+
+
+    return accuracies
 
 
 
@@ -458,10 +574,10 @@ if __name__ == '__main__':
     test_svm(X_arc, y_arc, X_leu, y_leu)
 
     # test k_subsample L1-SVM selection method 
-    subs = 25
+    subs = 10
     test_subsample_method(X_arc, y_arc, X_leu, y_leu, subs)
 
 
     # do method comparison of accuracies w/ Golub, L1-SVM subsample, and RFE
-    compare_methods(X_arc, y_arc)
-    compare_methods(X_leu, y_leu)
+    compare_methods(X_arc, y_arc, 'Arcene')
+    compare_methods(X_leu, y_leu, 'Leukemia')
